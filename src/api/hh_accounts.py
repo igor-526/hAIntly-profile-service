@@ -1,7 +1,7 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 
 from core.schemas import (
     AuthorizationRequest,
@@ -9,7 +9,6 @@ from core.schemas import (
     CompleteOAuthRequest,
     HHAccountList,
     HHAccountOut,
-    UserRequest,
 )
 from core.services import HHAccountService
 from depends.services import get_hh_account_service
@@ -26,23 +25,28 @@ async def authorization(
 
 @router.post("/oauth/complete", response_model=HHAccountOut)
 async def complete(
-    data: CompleteOAuthRequest, service: Annotated[HHAccountService, Depends(get_hh_account_service)]
+    data: CompleteOAuthRequest,
+    user_id: Annotated[UUID, Header(alias="X-User-Id")],
+    service: Annotated[HHAccountService, Depends(get_hh_account_service)],
 ) -> HHAccountOut:
-    return await service.complete(user_id=data.user_id, code=data.code)
+    return await service.complete(user_id=user_id, code=data.code)
 
 
 @router.post("/accounts/list", response_model=HHAccountList)
 async def list_accounts(
-    data: UserRequest, service: Annotated[HHAccountService, Depends(get_hh_account_service)]
+    user_id: Annotated[UUID, Header(alias="X-User-Id")],
+    service: Annotated[HHAccountService, Depends(get_hh_account_service)],
 ) -> HHAccountList:
-    return HHAccountList(accounts=await service.list(user_id=data.user_id))
+    return HHAccountList(accounts=await service.list(user_id=user_id))
 
 
 @router.post("/accounts/{account_id}", response_model=HHAccountOut)
 async def get_account(
-    account_id: UUID, data: UserRequest, service: Annotated[HHAccountService, Depends(get_hh_account_service)]
+    account_id: UUID,
+    user_id: Annotated[UUID, Header(alias="X-User-Id")],
+    service: Annotated[HHAccountService, Depends(get_hh_account_service)],
 ) -> HHAccountOut:
-    account = await service.get(user_id=data.user_id, account_id=account_id)
+    account = await service.get(user_id=user_id, account_id=account_id)
     if account is None:
         from fastapi import HTTPException
 
@@ -52,7 +56,9 @@ async def get_account(
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
-    account_id: UUID, data: UserRequest, service: Annotated[HHAccountService, Depends(get_hh_account_service)]
+    account_id: UUID,
+    user_id: Annotated[UUID, Header(alias="X-User-Id")],
+    service: Annotated[HHAccountService, Depends(get_hh_account_service)],
 ) -> Response:
-    await service.delete(user_id=data.user_id, account_id=account_id)
+    await service.delete(user_id=user_id, account_id=account_id)
     return Response(status_code=204)

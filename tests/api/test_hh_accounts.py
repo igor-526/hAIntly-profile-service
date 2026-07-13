@@ -29,10 +29,11 @@ def test_internal_typed_owner_scoped_list_get_delete_contract() -> None:
     service.delete.return_value = True
     app.dependency_overrides[get_hh_account_service] = lambda: service
     client = TestClient(app)
+    headers = {"X-User-Id": str(owner)}
     try:
-        listed = client.post("/internal/hh/accounts/list", json={"user_id": str(owner)})
-        fetched = client.post(f"/internal/hh/accounts/{account_id}", json={"user_id": str(owner)})
-        deleted = client.request("DELETE", f"/internal/hh/accounts/{account_id}", json={"user_id": str(owner)})
+        listed = client.post("/internal/hh/accounts/list", headers=headers)
+        fetched = client.post(f"/internal/hh/accounts/{account_id}", headers=headers)
+        deleted = client.delete(f"/internal/hh/accounts/{account_id}", headers=headers)
     finally:
         app.dependency_overrides.clear()
     assert listed.status_code == fetched.status_code == 200
@@ -48,7 +49,9 @@ def test_internal_get_hides_foreign_or_missing_account() -> None:
     service.get.return_value = None
     app.dependency_overrides[get_hh_account_service] = lambda: service
     try:
-        response = TestClient(app).post(f"/internal/hh/accounts/{uuid4()}", json={"user_id": str(uuid4())})
+        response = TestClient(app).post(
+            f"/internal/hh/accounts/{uuid4()}", headers={"X-User-Id": str(uuid4())}
+        )
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 404
@@ -65,9 +68,36 @@ def test_mock_hh_oauth_api_smoke_without_credentials() -> None:
     client = TestClient(app)
     try:
         started = client.post("/internal/hh/oauth/authorization", json={"state": "opaque"})
-        completed = client.post("/internal/hh/oauth/complete", json={"user_id": str(uuid4()), "code": "mock-code"})
+        completed = client.post(
+            "/internal/hh/oauth/complete", json={"code": "mock-code"}, headers={"X-User-Id": str(uuid4())}
+        )
     finally:
         app.dependency_overrides.clear()
     assert started.status_code == completed.status_code == 200
     assert started.json()["authorization_url"].startswith("https://hh.test/")
     assert "mock-code" not in completed.text
+
+
+def test_user_scoped_endpoints_require_valid_user_header_without_calling_service() -> None:
+    service = AsyncMock()
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    account_id = uuid4()
+    requests = [
+        ("POST", "/internal/hh/oauth/complete", {"code": "mock-code"}),
+        ("POST", "/internal/hh/accounts/list", None),
+        ("POST", f"/internal/hh/accounts/{account_id}", None),
+        ("DELETE", f"/internal/hh/accounts/{account_id}", None),
+    ]
+    try:
+        client = TestClient(app)
+        for method, path, body in requests:
+            for headers in ({}, {"X-User-Id": "invalid"}):
+                response = client.request(method, path, json=body, headers=headers)
+                assert response.status_code == 422
+    finally:
+        app.dependency_overrides.clear()
+
+    service.complete.assert_not_awaited()
+    service.list.assert_not_awaited()
+    service.get.assert_not_awaited()
+    service.delete.assert_not_awaited()

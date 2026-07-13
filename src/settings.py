@@ -8,7 +8,6 @@ class Settings(BaseSettings):
     environment: str = Field(default="development", alias="ENVIRONMENT")
     debug: bool = Field(default=True, alias="DEBUG")
     app_title: str = Field(default="FastAPI Template", alias="APP_TITLE")
-    cors_origins: str = Field(default="http://localhost:3000", alias="CORS_ORIGINS")
 
     sentry_enabled: bool = Field(default=False, alias="SENTRY_ENABLED")
     sentry_dsn: str = Field(default="", alias="SENTRY_DSN")
@@ -58,10 +57,6 @@ class Settings(BaseSettings):
             f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
-
-    @cached_property
-    def cors_origins_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
 settings = Settings()  # type: ignore[call-arg]

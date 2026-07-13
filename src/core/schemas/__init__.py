@@ -7,7 +7,6 @@ from .hh import (
     CompleteOAuthRequest,
     HHAccountList,
     HHAccountOut,
-    UserRequest,
 )
 
 __all__ = [
@@ -16,6 +15,5 @@ __all__ = [
     "CompleteOAuthRequest",
     "HHAccountList",
     "HHAccountOut",
-    "UserRequest",
     "Schema",
 ]

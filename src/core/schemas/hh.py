@@ -17,13 +17,7 @@ class AuthorizationResponse(Schema):
 
 class CompleteOAuthRequest(Schema):
     model_config = ConfigDict(extra="forbid")
-    user_id: UUID
     code: str = Field(min_length=1, max_length=4096)
-
-
-class UserRequest(Schema):
-    model_config = ConfigDict(extra="forbid")
-    user_id: UUID
 
 
 class HHAccountOut(Schema):

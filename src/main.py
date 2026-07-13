@@ -1,8 +1,6 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from api import hh_accounts_router
@@ -22,13 +20,6 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title=settings.app_title, debug=settings.debug, lifespan=lifespan)
 app.include_router(hh_accounts_router)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/health", tags=["Health"])
@@ -39,8 +30,3 @@ async def health() -> dict[str, str]:
 @app.exception_handler(AppError)
 async def app_error_handler(_: Request, exc: AppError) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_error_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
-    return JSONResponse(status_code=400, content={"detail": exc.errors()})
