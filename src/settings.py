@@ -1,6 +1,6 @@
 from functools import cached_property
 
-from pydantic import Field, model_validator
+from pydantic import AnyHttpUrl, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,12 +22,34 @@ class Settings(BaseSettings):
     postgres_port: int = Field(default=5432, alias="POSTGRES_PORT")
     postgres_db: str = Field(default="app", alias="POSTGRES_DB")
 
+    hh_token_encrypt_key: str = Field(alias="HH_TOKEN_ENCRYPT_KEY")
+    hh_redirect_url: AnyHttpUrl = Field(alias="HH_REDIRECT_URL")
+    hh_client_id: str = Field(alias="HH_CLIENT_ID")
+    hh_client_secret: str = Field(alias="HH_CLIENT_SECRET")
+    hh_auth_url: AnyHttpUrl = Field(
+        default_factory=lambda: AnyHttpUrl("https://hh.ru/oauth/authorize"), alias="HH_AUTH_URL"
+    )
+    hh_token_url: AnyHttpUrl = Field(
+        default_factory=lambda: AnyHttpUrl("https://api.hh.ru/token"), alias="HH_TOKEN_URL"
+    )
+    hh_profile_url: AnyHttpUrl = Field(
+        default_factory=lambda: AnyHttpUrl("https://api.hh.ru/me"), alias="HH_PROFILE_URL"
+    )
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> Settings:
         if self.sentry_enabled and not self.sentry_dsn:
             raise ValueError("SENTRY_DSN is required when SENTRY_ENABLED=true")
+        from cryptography.fernet import Fernet
+
+        try:
+            Fernet(self.hh_token_encrypt_key.encode())
+        except (ValueError, TypeError) as exc:
+            raise ValueError("HH_TOKEN_ENCRYPT_KEY must be a valid Fernet key") from exc
+        if not self.hh_client_id or not self.hh_client_secret:
+            raise ValueError("HH OAuth credentials are required")
         return self
 
     @cached_property
@@ -42,4 +64,4 @@ class Settings(BaseSettings):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
-settings = Settings()
+settings = Settings()  # type: ignore[call-arg]

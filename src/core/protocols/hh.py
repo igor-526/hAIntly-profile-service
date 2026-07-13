@@ -1,0 +1,9 @@
+from typing import Protocol
+
+from core.entities import HHTokens
+
+
+class HHClientProtocol(Protocol):
+    def authorization_url(self, *, state: str) -> str: ...
+    async def exchange_code(self, *, code: str) -> HHTokens: ...
+    async def get_profile(self, *, access_token: str) -> dict[str, object]: ...
