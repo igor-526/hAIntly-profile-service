@@ -4,6 +4,7 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from core.exceptions import ClientError, HHRefreshError
 from core.schemas import HHAccountOut
 from depends.services import get_hh_account_service
 from main import app
@@ -101,3 +102,96 @@ def test_user_scoped_endpoints_require_valid_user_header_without_calling_service
     service.list.assert_not_awaited()
     service.get.assert_not_awaited()
     service.delete.assert_not_awaited()
+
+
+def test_hh_token_endpoint_success() -> None:
+    owner, account_id = uuid4(), uuid4()
+    service = AsyncMock()
+    service.get_access_token.return_value = ("test-access-token", datetime(2026, 7, 15, 12, 0, tzinfo=UTC))
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    try:
+        response = TestClient(app).get(
+            f"/internal/hh/hh-token/{account_id}",
+            headers={"X-User-Id": str(owner)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["access_token"] == "test-access-token"
+    assert "expires_at" in body
+    service.get_access_token.assert_awaited_once_with(account_id=account_id, user_id=owner, refresh=False)
+
+
+def test_hh_token_endpoint_with_refresh() -> None:
+    owner, account_id = uuid4(), uuid4()
+    service = AsyncMock()
+    service.get_access_token.return_value = ("refreshed-token", datetime(2026, 7, 15, 14, 0, tzinfo=UTC))
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    try:
+        response = TestClient(app).get(
+            f"/internal/hh/hh-token/{account_id}?refresh=true",
+            headers={"X-User-Id": str(owner)},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["access_token"] == "refreshed-token"
+    service.get_access_token.assert_awaited_once_with(account_id=account_id, user_id=owner, refresh=True)
+
+
+def test_hh_token_endpoint_account_not_found() -> None:
+    service = AsyncMock()
+    service.get_access_token.return_value = None
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    try:
+        response = TestClient(app).get(
+            f"/internal/hh/hh-token/{uuid4()}",
+            headers={"X-User-Id": str(uuid4())},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 404
+    assert response.json()["detail"] == "HH-аккаунт не найден"
+
+
+def test_hh_token_endpoint_refresh_failed_invalid_grant() -> None:
+    service = AsyncMock()
+    service.get_access_token.side_effect = HHRefreshError("invalid_grant")
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    try:
+        response = TestClient(app).get(
+            f"/internal/hh/hh-token/{uuid4()}?refresh=true",
+            headers={"X-User-Id": str(uuid4())},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 401
+    body = response.json()
+    assert body["detail"]["detail"] == "hh_token_refresh_failed"
+
+
+def test_hh_token_endpoint_refresh_failed_other_error() -> None:
+    service = AsyncMock()
+    service.get_access_token.side_effect = ClientError("network error")
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    try:
+        response = TestClient(app).get(
+            f"/internal/hh/hh-token/{uuid4()}?refresh=true",
+            headers={"X-User-Id": str(uuid4())},
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 502
+    assert response.json()["detail"] == "hh_refresh_error"
+
+
+def test_hh_token_endpoint_requires_user_id() -> None:
+    service = AsyncMock()
+    app.dependency_overrides[get_hh_account_service] = lambda: service
+    try:
+        response = TestClient(app).get(f"/internal/hh/hh-token/{uuid4()}")
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 422
+    service.get_access_token.assert_not_awaited()

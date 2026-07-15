@@ -1,12 +1,14 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 
+from core.exceptions import ClientError, HHRefreshError
 from core.schemas import (
     AuthorizationRequest,
     AuthorizationResponse,
     CompleteOAuthRequest,
+    HHAccessTokenOut,
     HHAccountList,
     HHAccountOut,
 )
@@ -48,8 +50,6 @@ async def get_account(
 ) -> HHAccountOut:
     account = await service.get(user_id=user_id, account_id=account_id)
     if account is None:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=404, detail="HH-аккаунт не найден")
     return account
 
@@ -62,3 +62,24 @@ async def delete_account(
 ) -> Response:
     await service.delete(user_id=user_id, account_id=account_id)
     return Response(status_code=204)
+
+
+@router.get("/hh-token/{account_id}", response_model=HHAccessTokenOut)
+async def get_hh_token(
+    account_id: UUID,
+    user_id: Annotated[UUID, Header(alias="X-User-Id")],
+    service: Annotated[HHAccountService, Depends(get_hh_account_service)],
+    refresh: bool = Query(default=False),
+) -> HHAccessTokenOut:
+    try:
+        result = await service.get_access_token(account_id=account_id, user_id=user_id, refresh=refresh)
+    except HHRefreshError as exc:
+        raise HTTPException(
+            status_code=401, detail={"detail": "hh_token_refresh_failed", "account_id": str(account_id)}
+        ) from exc
+    except ClientError as exc:
+        raise HTTPException(status_code=502, detail="hh_refresh_error") from exc
+    if result is None:
+        raise HTTPException(status_code=404, detail="HH-аккаунт не найден")
+    access_token, expires_at = result
+    return HHAccessTokenOut(access_token=access_token, expires_at=expires_at)

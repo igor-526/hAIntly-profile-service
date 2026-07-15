@@ -32,3 +32,8 @@ class HHAccountOut(Schema):
 
 class HHAccountList(Schema):
     accounts: list[HHAccountOut]
+
+
+class HHAccessTokenOut(Schema):
+    access_token: str
+    expires_at: datetime

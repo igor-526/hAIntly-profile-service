@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 import aiohttp
 
 from core.entities import HHTokens
-from core.exceptions import ClientError
+from core.exceptions import ClientError, HHRefreshError
 
 
 class AiohttpHHClient:
@@ -56,6 +56,26 @@ class AiohttpHHClient:
         except (KeyError, TypeError, ValueError) as exc:
             raise ClientError("HH вернул некорректный ответ") from exc
 
+    async def refresh_token(self, *, refresh_token: str) -> HHTokens:
+        payload = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }
+        try:
+            data = await self._request("POST", self.token_url, data=payload)
+        except ClientError as exc:
+            if "invalid_grant" in str(exc.message).lower():
+                raise HHRefreshError("HH refresh token недействителен") from exc
+            raise
+        try:
+            return HHTokens(
+                access_token=str(data["access_token"]),
+                refresh_token=str(data["refresh_token"]),
+                expires_at=datetime.now(UTC) + timedelta(seconds=int(str(data["expires_in"]))),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ClientError("HH вернул некорректный ответ") from exc
+
     async def get_profile(self, *, access_token: str) -> dict[str, object]:
         return await self._request("GET", self.profile_url, headers={"Authorization": f"Bearer {access_token}"})
 
@@ -66,7 +86,8 @@ class AiohttpHHClient:
             async with aiohttp.ClientSession(timeout=self.timeout) as session:
                 async with session.request(method, url, data=data, headers=headers) as response:
                     if response.status >= 400:
-                        raise ClientError("Операция HH не выполнена")
+                        body = await response.text()
+                        raise ClientError(f"Операция HH не выполнена: {body}")
                     data = await response.json()
                     if not isinstance(data, dict):
                         raise ClientError("HH вернул некорректный ответ")

@@ -1,10 +1,13 @@
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from core.entities import HHAccount
-from core.exceptions import AlreadyExistsError, ClientError
+from core.exceptions import AlreadyExistsError, ClientError, HHRefreshError
 from core.protocols import HHAccountRepositoryProtocol, HHClientProtocol
 from core.schemas import HHAccountOut
 from infrastructure.crypto import TokenCrypto
+
+_REFRESH_THRESHOLD = timedelta(seconds=60)
 
 
 class HHAccountService:
@@ -58,6 +61,30 @@ class HHAccountService:
 
     async def delete(self, *, user_id: UUID, account_id: UUID) -> bool:
         return await self.accounts.delete(user_id=user_id, account_id=account_id)
+
+    async def get_access_token(
+        self, *, account_id: UUID, user_id: UUID, refresh: bool = False
+    ) -> tuple[str, datetime] | None:
+        account = await self.accounts.get(user_id=user_id, account_id=account_id)
+        if account is None:
+            return None
+
+        if refresh and self._token_expiring(account.access_token_expires_at):
+            account = await self._perform_refresh(account)
+
+        return self.crypto.decrypt(account.access_token_ciphertext), account.access_token_expires_at
+
+    @staticmethod
+    def _token_expiring(expires_at: datetime) -> bool:
+        return datetime.now(UTC) >= expires_at - _REFRESH_THRESHOLD
+
+    async def _perform_refresh(self, account: HHAccount) -> HHAccount:
+        refresh_plaintext = self.crypto.decrypt(account.refresh_token_ciphertext)
+        tokens = await self.hh.refresh_token(refresh_token=refresh_plaintext)
+        account.access_token_ciphertext = self.crypto.encrypt(tokens.access_token)
+        account.refresh_token_ciphertext = self.crypto.encrypt(tokens.refresh_token)
+        account.access_token_expires_at = tokens.expires_at
+        return await self.accounts.save(account=account)
 
     @staticmethod
     def _out(account: HHAccount) -> HHAccountOut:
