@@ -8,8 +8,15 @@ from main import app
 
 class MockHHAccountService:
     def __init__(self) -> None:
-        self.account = HHAccountOut(id=uuid4(), hh_user_id="mock-hh-user", display_name="Mock HH",
-                                    email=None, avatar_url=None, created_at=datetime.now(UTC), updated_at=None)
+        self.account = HHAccountOut(
+            id=uuid4(),
+            hh_user_id="mock-hh-user",
+            display_name="Mock HH",
+            email=None,
+            avatar_url=None,
+            created_at=datetime.now(UTC),
+            updated_at=None,
+        )
 
     def authorization_url(self, *, state: str) -> str:
         return f"https://hh.mock/oauth?state={state}"

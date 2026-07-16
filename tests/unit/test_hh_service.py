@@ -19,6 +19,11 @@ class FakeHH:
             access_token="access", refresh_token="refresh", expires_at=datetime.now(UTC) + timedelta(hours=1)
         )
 
+    async def refresh_token(self, *, refresh_token: str) -> HHTokens:
+        return HHTokens(
+            access_token="access", refresh_token=refresh_token, expires_at=datetime.now(UTC) + timedelta(hours=1)
+        )
+
     async def get_profile(self, *, access_token: str) -> dict[str, object]:
         return {"id": "hh-1", "first_name": "Иван", "last_name": "Иванов", "email": "i@example.test"}
 

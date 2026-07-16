@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from core.entities import HHAccount
-from core.exceptions import AlreadyExistsError, ClientError, HHRefreshError
+from core.exceptions import AlreadyExistsError, ClientError
 from core.protocols import HHAccountRepositoryProtocol, HHClientProtocol
 from core.schemas import HHAccountOut
 from infrastructure.crypto import TokenCrypto

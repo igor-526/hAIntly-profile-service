@@ -50,9 +50,7 @@ def test_internal_get_hides_foreign_or_missing_account() -> None:
     service.get.return_value = None
     app.dependency_overrides[get_hh_account_service] = lambda: service
     try:
-        response = TestClient(app).post(
-            f"/internal/hh/accounts/{uuid4()}", headers={"X-User-Id": str(uuid4())}
-        )
+        response = TestClient(app).post(f"/internal/hh/accounts/{uuid4()}", headers={"X-User-Id": str(uuid4())})
     finally:
         app.dependency_overrides.clear()
     assert response.status_code == 404

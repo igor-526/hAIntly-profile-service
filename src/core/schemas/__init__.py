@@ -2,10 +2,10 @@ from .base import Schema
 
 __all__ = ["Schema"]
 from .hh import (
-    HHAccessTokenOut,
     AuthorizationRequest,
     AuthorizationResponse,
     CompleteOAuthRequest,
+    HHAccessTokenOut,
     HHAccountList,
     HHAccountOut,
 )
