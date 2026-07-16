@@ -1,6 +1,6 @@
 apiVersion: v2
 name: haintly-profile-service
-description: A Helm chart for HAIntly main backend
+description: A Helm chart for HAIntly Profile Service
 
 # A chart can be either an 'application' or a 'library' chart.
 #
